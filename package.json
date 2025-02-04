@@ -1,0 +1,48 @@
+{
+  "name": "nodejs-typescript-template",
+  "version": "1.422.0",
+  "description": "A template for a nodejs application, using typescript",
+  "main": "dist/src/index.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "dev": "nodemon --watch src/**/*.ts --exec ts-node ./dist/index.js",
+    "build": "tsc",
+    "start": "node ./dist/index.js",
+    "lint": "eslint --fix --quiet src/**/*.ts",
+    "format": "prettier --loglevel silent --write src/**/*.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.17.3",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^2.3.3",
+    "node-cron": "^3.0.2",
+    "node-schedule": "^2.1.1",
+    "nodemon": "^3.1.9",
+    "passport": "^0.6.0",
+    "passport-facebook": "^3.0.0",
+    "passport-twitter": "^1.0.4",
+    "sequelize": "^6.37.5",
+    "twitter-api-v2": "^1.19.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/express-session": "^1.18.1",
+    "@types/multer": "^1.4.7",
+    "@types/node": "^18.15.11",
+    "@types/node-cron": "^3.0.7",
+    "@types/node-schedule": "^2.1.7",
+    "@types/passport": "^1.0.12",
+    "@types/passport-facebook": "^3.0.3",
+    "@types/passport-twitter": "^1.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.5"
+  },
+  "keywords": []
+}
