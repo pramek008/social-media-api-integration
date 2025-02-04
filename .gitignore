@@ -11,4 +11,5 @@ yarn-error.log
 #coverage
 coverage
 
-/uploads
+uploads/*
+!uploads/.gitkeep
