@@ -12,7 +12,9 @@ class ScheduledPostInstagram
   mediaType!: 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'REELS'; // Jenis media
   scheduledTime!: Date; // Waktu penjadwalan post
   containerId?: string; // ID container yang dibuat di Instagram
+  containerCaraouselId?: string | undefined;
   instagramMediaId?: string; // ID media yang dipublikasikan di Instagram
+  postUrl?: string | undefined;
   status!: 'PENDING' | 'PUBLISHED' | 'FAILED' | 'DRAFT';
   retryCount!: number; // Jumlah percobaan retry
   error?: string | undefined; // Pesan error jika gagal
@@ -49,12 +51,23 @@ export const initScheduledPostInstagram = (
         type: DataTypes.ENUM('IMAGE', 'VIDEO', 'CAROUSEL', 'REELS'),
         allowNull: false,
       },
-      scheduledTime: DataTypes.DATE,
+      scheduledTime: {
+        type: DataTypes.DATE,
+        allowNull: false,
+      },
       containerId: {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      containerCaraouselId: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
       instagramMediaId: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      postUrl: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
