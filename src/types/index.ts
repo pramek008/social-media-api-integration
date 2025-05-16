@@ -56,21 +56,23 @@ export interface ScheduledPostInstagramAttributes {
   scheduledTime: Date; // Waktu penjadwalan post
   containerId?: string; // ID container yang dibuat di Instagram
   instagramMediaId?: string; // ID media yang dipublikasikan di Instagram
+  postUrl?: string;
+  containerCaraouselId?: string;
   status: 'PENDING' | 'PUBLISHED' | 'FAILED' | 'DRAFT'; // Status post
   retryCount: number; // Jumlah percobaan retry
   error?: string | undefined; // Pesan error jika gagal
   publishedAt?: Date; // Waktu post berhasil dipublikasikan
 }
 
-export interface SuccessPublishedPostInstagramAttributes {
-  id?: number;
-  postId: string;
-  captionPayload: string;
-  postMediaPayload: string;
-  postUrl: string;
-  userCredentialsId: number;
-  scheduledPostId: number;
-}
+// export interface SuccessPublishedPostInstagramAttributes {
+//   id?: number;
+//   postId: string;
+//   captionPayload: string;
+//   postMediaPayload: string;
+//   postUrl: string;
+//   userCredentialsId: number;
+//   scheduledPostId: number;
+// }
 
 export interface Config {
   database: {

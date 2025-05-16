@@ -29,7 +29,7 @@ export class InstargramSchedulers extends EventEmitter {
   ): void {
     // Cancel existing job if it exists
     this.cancelJob(instagremPost.id!);
-    console.log('Scheduled instagremPost', JSON.stringify(instagremPost));
+
     // Schedule the new job
     const job = schedule.scheduleJob(
       new Date(instagremPost.scheduledTime),
@@ -100,6 +100,30 @@ export class InstargramSchedulers extends EventEmitter {
       }
     } catch (error) {
       console.error('Failed to load pending post ig:', error);
+    }
+  }
+
+  public async addJob(postId: number): Promise<void> {
+    try {
+      const post = await ScheduledPostInstagram.findByPk(postId);
+      if (post) {
+        const scheduledTime = new Date(post.scheduledTime);
+        // Only schedule future tweets
+        if (scheduledTime > new Date()) {
+          this.scheduleJob(
+            post.dataValues as any,
+            post.userCredentialInstagram,
+          );
+        } else {
+          console.log(
+            `Skipping past post ig ${post.id} scheduled for ${post.scheduledTime}`,
+          );
+        }
+      } else {
+        console.log(`Post ig ${postId} not found`);
+      }
+    } catch (error) {
+      console.error('Failed to schedule post ig:', error);
     }
   }
 

@@ -3,8 +3,10 @@ import { UserCredentialInstagram } from '../models/UserCredentialInstagram';
 import { decrypt } from '../utils/encryption';
 import { ScheduledPostInstagramAttributes } from '../types';
 import { ScheduledPostInstagram } from '../models';
+import { InstargramSchedulers } from './scheduler-instagram';
+import { instagramConfig } from '../config/instagram';
 
-const INSTAGRAM_BASE_URL = 'https://graph.instagram.com/v22.0/';
+const INSTAGRAM_BASE_URL = instagramConfig.base_api_url;
 
 interface MediaItem {
   url: string;
@@ -20,6 +22,20 @@ export class InstagramService {
     caption?: string,
     isCarouselItem: boolean = false,
   ): Promise<string> {
+    const body = {
+      image_url: mediaItem.type === 'IMAGE' ? mediaItem.url : undefined,
+      video_url: ['VIDEO', 'REELS'].includes(mediaItem.type)
+        ? mediaItem.url
+        : undefined,
+      media_type: ['VIDEO', 'REELS'].includes(mediaItem.type)
+        ? 'REELS'
+        : 'IMAGE',
+      is_carousel_item: isCarouselItem,
+      caption: caption,
+    };
+
+    console.log(`Body: ${JSON.stringify(body)}`);
+
     const response = await fetch(
       `${INSTAGRAM_BASE_URL}/${instagramUserId}/media?access_token=${accessToken}`,
       {
@@ -27,20 +43,12 @@ export class InstagramService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          image_url: mediaItem.type === 'IMAGE' ? mediaItem.url : undefined,
-          video_url: ['VIDEO', 'REELS'].includes(mediaItem.type)
-            ? mediaItem.url
-            : undefined,
-          media_type: mediaItem.type,
-          is_carousel_item: isCarouselItem,
-          caption: isCarouselItem ? undefined : caption, // Caption only for single posts
-        }),
+        body: JSON.stringify(body),
       },
     );
-    console.log(`Response: ${JSON.stringify(response)}`);
 
     const data = await response.json();
+    console.log(`Response: ${JSON.stringify(data)}`);
     if (!data.id) {
       throw new Error(
         `Failed to create media container: ${JSON.stringify(data)}`,
@@ -52,25 +60,29 @@ export class InstagramService {
   private async createCarouselContainer(
     instagramUserId: string,
     accessToken: string,
-    mediaIds: string[],
+    mediaIds: string,
     caption: string,
   ): Promise<string> {
-    const response = await fetch(
-      `${INSTAGRAM_BASE_URL}/${instagramUserId}/media?access_token=${accessToken}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          media_type: 'CAROUSEL',
-          children: mediaIds,
-          caption: caption,
-        }),
+    const url = `${INSTAGRAM_BASE_URL}/${instagramUserId}/media?access_token=${accessToken}`;
+
+    const body = {
+      media_type: 'CAROUSEL',
+      children: mediaIds,
+      caption: caption,
+    };
+
+    // console.log(`Body: ${JSON.stringify(body)}`);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    );
+      body: JSON.stringify(body),
+    });
 
     const data = await response.json();
+
     if (!data.id) {
       throw new Error(
         `Failed to create carousel container: ${JSON.stringify(data)}`,
@@ -94,6 +106,9 @@ export class InstagramService {
         throw new Error('Reels cannot be included in carousel posts');
       }
     }
+  }
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   public async createMediaContainer(req: Request, res: Response): Promise<any> {
@@ -132,12 +147,14 @@ export class InstagramService {
 
       const accessToken = decrypt(user.accessToken);
 
-      let containerId: string;
+      let containerId;
+      let containerCaraouselId;
+      const MAX_RETRIES = 3;
+      let retryCount = 0;
+      let errorMessage = null;
 
-      // Handle single post vs carousel
       if (mediaItems.length === 1) {
-        // Single post (image, video, or reel)
-        console.log('Create Single Media Container');
+        // Single post handling remains the same
         containerId = await this.createSingleMediaContainer(
           userId.toString(),
           user.instagramUserId,
@@ -146,7 +163,7 @@ export class InstagramService {
           caption,
         );
       } else {
-        // Carousel post
+        // Carousel post with retry mechanism
         const mediaContainerIds = await Promise.all(
           mediaItems.map((mediaItem) =>
             this.createSingleMediaContainer(
@@ -159,13 +176,40 @@ export class InstagramService {
             ),
           ),
         );
-        console.log('Create Carousel Media Container');
-        containerId = await this.createCarouselContainer(
-          user.instagramUserId,
-          accessToken,
-          mediaContainerIds,
-          caption || '',
-        );
+
+        containerCaraouselId = mediaContainerIds;
+
+        // Retry logic for carousel container
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            console.log(`Carousel Container Creation - Attempt ${attempt}`);
+            await this.delay(5000 * attempt); // Exponential backoff
+
+            containerId = await this.createCarouselContainer(
+              user.instagramUserId,
+              accessToken,
+              mediaContainerIds.toString(),
+              caption || '',
+            );
+            break; // Success, exit retry loop
+          } catch (error) {
+            console.error(
+              `Carousel Container Creation Failed - Attempt ${attempt}:`,
+              error,
+            );
+
+            retryCount = attempt;
+            errorMessage = error as unknown as string;
+
+            if (attempt === MAX_RETRIES) {
+              // All attempts failed
+              errorMessage = error as unknown as string;
+              throw new Error(
+                'Failed to create carousel container after maximum retries',
+              );
+            }
+          }
+        }
       }
 
       // Create scheduled post record
@@ -173,18 +217,25 @@ export class InstagramService {
         userId: userId,
         caption: caption!,
         mediaUrls: mediaItems.map((item) => item.url).join(', '),
-        mediaType: mediaItems.length > 1 ? 'CAROUSEL' : mediaItems[0].type,
+        mediaType:
+          mediaItems.length > 1
+            ? 'CAROUSEL'
+            : mediaItems.length === 1 && mediaItems[0].type === 'VIDEO'
+            ? 'REELS'
+            : 'IMAGE',
         containerId,
+        containerCaraouselId: containerCaraouselId?.toString(),
         scheduledTime: new Date(scheduledTime!),
         status: 'PENDING',
-        retryCount: 0,
+        retryCount: retryCount,
+        error: retryCount !== 3 ? undefined : errorMessage?.toString(),
       };
 
       // Save scheduled post to database
-      await ScheduledPostInstagram.create(scheduledPost);
+      const savedPost = await ScheduledPostInstagram.create(scheduledPost);
 
       const resposeData = {
-        ...scheduledPost,
+        ...savedPost.dataValues,
         mediaUrls: scheduledPost.mediaUrls.split(','),
         scheduledTime: scheduledPost.scheduledTime.toISOString(),
       };
@@ -236,7 +287,24 @@ export class InstagramService {
         throw new Error('Failed to publish scheduled post');
       }
 
+      const getLinkPost = await fetch(
+        `${INSTAGRAM_BASE_URL}/${data.id}?fields=id,shortcode,media_type,media_url,owner,timestamp,caption,like_count,comments_count,permalink,thumbnail_url&access_token=${accessToken}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!getLinkPost.ok) {
+        console.error('Failed to get link post', getLinkPost);
+      }
+
+      const dataLink = await getLinkPost.json();
+
       scheduledPost.instagramMediaId = data.id;
+      scheduledPost.postUrl = dataLink.permalink;
       scheduledPost.status = 'PUBLISHED';
       await scheduledPost.save();
     } catch (error) {
